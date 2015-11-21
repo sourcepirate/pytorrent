@@ -6,6 +6,9 @@ import re
 # http://www.bittorrent.org/beps/bep_0003.html
 # given specification
 
+if six.PY3:
+    basestring = str
+
 class BencodeException(Exception):
     """Base class for all bencode Exceptions"""
 
