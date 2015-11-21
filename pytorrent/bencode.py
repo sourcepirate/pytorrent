@@ -8,6 +8,7 @@ import re
 
 if six.PY3:
     basestring = str
+    unicode = six.u
 
 class BencodeException(Exception):
     """Base class for all bencode Exceptions"""
