@@ -27,3 +27,23 @@ class BecodeTester(unittest.TestCase):
         strs = Bencoder.encode(dict(a="1"))
         self.assertEqual(strs, "d1:a1:1e")
 
+    def test_string_decode(self):
+        """tests string decode"""
+        strs = Bencoder.decode("1:a")
+        self.assertEqual(strs, "a")
+
+    def test_list_decode(self):
+        """tests list decode"""
+        strs = Bencoder.decode("li34ee")
+        self.assertEqual(strs, [34])
+
+    def test_integer_decode(self):
+        """test integer decode"""
+        strs = Bencoder.decode("i34e")
+        self.assertEqual(strs, 34)
+
+    def test_dict_decode(self):
+        """test dict decode"""
+        strs = Bencoder.decode("d4:abcdli34eee")
+        self.assertEqual(strs.get("abcd"), [34])
+

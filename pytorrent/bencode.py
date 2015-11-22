@@ -6,9 +6,11 @@ import re
 # http://www.bittorrent.org/beps/bep_0003.html
 # given specification
 
+__DATAPATTERN = "([idel])|(\d+):|(-?\d+)"
+
 if six.PY3:
     basestring = str
-    unicode = six.u
+    unicode = str
 
 class BencodeException(Exception):
     """Base class for all bencode Exceptions"""
@@ -108,6 +110,75 @@ def _encode_dict(dct):
     return strs
 
 #decoding part
+#will try to use serial recursive tokenizer where input is divided
+#into list of meaning full parts. and then parsed.
+
+def _tokenizer(text_to_match):
+    """
+      Tokenises the bencodes string into a python list of tokens
+      and types
+      i for integer
+      s for string
+      d for dict
+      l for list
+    :param text_to_match:
+    """
+
+    match = re.compile(__DATAPATTERN).match # match(string, pos=0, endpos=-1)
+    token_length = 0
+    while token_length < len(text_to_match):
+        m = match(text_to_match, token_length)
+        s = m.group(m.lastindex) #http://stackoverflow.com/questions/22489243/re-in-python-lastindex-attribute
+        token_length = m.end()
+
+        if m.lastindex == 2: # then it is a bencoded string
+            yield "s"
+            yield text_to_match[token_length: token_length+int(s)]
+            token_length += int(s)
+        else:
+            yield s
+
+def _decode_item(next, token):
+    """
+      parses the decoded token
+    :param next: iterator
+    :param token: value of iterator
+    """
+    if token == "i":
+        data = int(next())
+        if next() != "e": # then invalid integer
+            raise BencodeDecodeError("Invalid parsable Integer", token)
+    elif token == "s": #then it is a string
+        data = next()
+    elif token == "l" or token == "d":
+        data = []
+        tok = next()
+        while tok != "e":
+            data.append(_decode_item(next, tok))
+            tok = next()
+        if token == "d":
+            #since we get key value pairs like ["map", "hello", "we", "play",]
+            # set map = 0 = key, hello = 1 = value
+            # set we  = 2 = key, play  = 3= value
+            # the parser has to move from 2 positions from the current position
+            # in the token list
+            data = dict(zip(data[0::2], data[1::2]))
+    else:
+        raise BencodeDecodeError("Invalid Structure Object", token)
+
+    return data
+
+def _decode(text):
+    """Decodes the becode String"""
+    try:
+        src = _tokenizer(text)
+        data = _decode_item(src.next, src.next())
+        for token in src: # look for more tokens
+            raise BencodeDecodeError("Trailing junk tokens", token)
+    except BencodeException:
+        raise BencodeDecodeError("Ilegal syntax", data)
+    return data
+
 
 
 
@@ -120,7 +191,6 @@ class Bencoder(object):
     @classmethod
     def encode(cls, obj):
         """encodes each python std object to bencoded strs"""
-
         if isinstance(obj, (str, basestring, unicode)):
             return _encode_string(obj)
         elif isinstance(obj, (int, long, )):
@@ -135,4 +205,5 @@ class Bencoder(object):
 
     @classmethod
     def decode(cls, becode_string):
-        pass
+        """decodes the becoded strings to python objects"""
+        return _decode(becode_string)
