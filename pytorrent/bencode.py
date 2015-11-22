@@ -12,6 +12,7 @@ __DATAPATTERN = "([idel])|(\d+):|(-?\d+)"
 if six.PY3:
     basestring = str
     unicode = str
+    long = int
 
 class BencodeException(Exception):
     """Base class for all bencode Exceptions"""
