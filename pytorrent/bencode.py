@@ -2,6 +2,7 @@
 
 import six, json
 import re
+from functools import partial
 
 # http://www.bittorrent.org/beps/bep_0003.html
 # given specification
@@ -168,11 +169,14 @@ def _decode_item(next, token):
 
     return data
 
+
+
 def _decode(text):
     """Decodes the becode String"""
     try:
         src = _tokenizer(text)
-        data = _decode_item(src.next, src.next())
+        pf = partial(six.next, src)
+        data = _decode_item(pf, six.next(src))
         for token in src: # look for more tokens
             raise BencodeDecodeError("Trailing junk tokens", token)
     except BencodeException:
