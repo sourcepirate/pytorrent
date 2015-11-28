@@ -1,9 +1,15 @@
 # author: plasmashadow
 
-import requests, six, json
-from six.moves.urllib.parse import urlencode
-from .bencode import Bencoder
+import hashlib
+import json
+import requests
+import socket
+import struct
+import binascii
+from six.moves.urllib.parse import urlparse
 
+from utils import _generate_pear_id, generation_randomid
+from .bencode import Bencoder
 
 
 class TrackerException(Exception):
@@ -16,6 +22,9 @@ class TrackerException(Exception):
     def __repr__(self):
         return "<TrackerException mode = %s>[%s]=>[%s]" % (self.mode, self.message, self.data)
 
+    def __str__(self):
+        return self.__repr__()
+
 
 class TrackerRequestException(TrackerException):
     """exception on tracker request"""
@@ -27,7 +36,13 @@ class TrackerResponseException(TrackerException):
     mode = "response"
 
 
-class TrackerRequest(dict):
+def _parse_udp_url(url):
+    """parses the udp trackert url"""
+    parsed = urlparse(url)
+    return parsed.hostname, parsed.port
+
+
+class TrackerRequest(dict, object):
     """request wrapper for tracker request
 
     'info_hash':
@@ -68,10 +83,10 @@ class TrackerRequest(dict):
     'event':
        If not specified, the request is taken to be a regular periodic request.
 
-
     """
 
     __allowables = [
+
         ("info_hash", True),
         ("peer_id", True),
         ("port", True),
@@ -80,7 +95,8 @@ class TrackerRequest(dict):
         ("left", True),
         ("ip", False),
         ("numwant", False),
-        ("event", False)
+        ("event", False),
+
     ]
 
     __events_allowed = [
@@ -89,34 +105,113 @@ class TrackerRequest(dict):
         "completed"
     ]
 
-    def __init__(self, *args, **kwargs):
+    __connection_id = 0x41727101980
+    __transaction_id = generation_randomid(5, integer=True)
 
-        self.url = kwargs.pop('announce', None)
-        if not self.url:
+    def __setattr__(self, key, value):
+        """setting attribute to the dict instance"""
+        self.__dict__.update([(key, value)])
+
+    def __init__(self, **kwargs):
+
+        data = self.__dict__
+        event = (0, 'started')
+
+        self.connected = False
+        self.connection_id = self.__connection_id
+
+        data["url"] = kwargs.pop('announce', None)
+
+        if not data["url"]:
             raise TrackerRequestException("no url mentioned", kwargs)
 
-        allowed_values = filter(lambda x: x[1] == True, self.__allowables)
-        allowed_values = set(allowed_values)
-        given_values = set(six.iterkeys(kwargs))
+        becoded_str = Bencoder.encode(kwargs.get("info"))
 
-        if not allowed_values.issubset(given_values):
-            remaining = given_values - allowed_values
-            raise TrackerRequest("[illegal request] expected %s not in request", str(remaining))
+        self["length"] = self.length = kwargs.get("info")
+        self["info_hash"] = self.info_hash = hashlib.sha1(becoded_str).digest()
+        self["peer_id"] = self.peer_id = _generate_pear_id('KO', '0001')
 
-        if 'event' in kwargs and kwargs.get('event') not in self.__events_allowed:
-            raise TrackerRequest("Illegal event value", kwargs['event'])
+        self["port"] = self.port = kwargs.get("port", int(6753))
 
-        self.update(*args, **kwargs)
+        self["uploaded"] = self.uploaded = 0
+        self["downloaded"] = self.downloaded = 0
+        self["compact"] = 1
+
+        if kwargs.get("info").get('files'):
+            files = kwargs.get("info").get('files')
+            self["length"] = self.length = sum([f["length"] for f in files])
+        else:
+            self["length"] = self.length = kwargs.get("info").get("length")
+
+        self["left"] = self.left
+        self["event"] = event[0]
+
+        #optional values
+        self["ip"] = 0
+        self["key"] = 0
+        self["numwant"] = -1
+        self["action"] = 0
 
     def hit(self):
         """Hit the announce url and get the trackers response """
-        response = requests.get(self.url, params=self)
-        return TrackerResponse(response.content)
+        if not "udp://" in self.url:
+            response = requests.get(self.__dict__["url"], params=self)
+            return TrackerResponse(response.content)
+        else:
+            self._handler_udp()
 
-# work in progress
+
+
+
+    @property
+    def left(self):
+        return self["length"] - self["downloaded"]
+
+
+    def _announce(self, announce_state, event_state):
+        print self.connection_id, self.left, self
+        announce_packet = struct.pack(">Qii20s20sQQQiiiii", self.connection_id,
+                                long(announce_state),
+                                self.__transaction_id, self.get("info_hash"),
+                                self.get("peer_id"), long(self.get("downloaded")),
+                                long(self.left), long(self.get("uploaded")),
+                                event_state, self.get("ip"),
+                                self.get('key'), self.get('numwant'),self.get("port"))
+        return announce_packet
+
+    def _handler_udp(self):
+        self.socket = client_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        if not self.connected:
+            announce_packet = self._announce(0, 0) # 0 for on connect NOTE: refere beps
+            client_socket.sendto(announce_packet, _parse_udp_url(self.url))
+            res = client_socket.recvfrom(1024)
+            data, address = res
+            unpack_struct = struct.Struct('>iiq')
+            action, self.transaction_id, message = unpack_struct.unpack(data)
+            print action, self.transaction_id, message
+            if action == 3:
+                raise TrackerRequestException(message, "")
+            if message:
+                self.connected = True
+                self.connection_id = hex(message)
+        else:
+            announce_packet = self._announce(1, 1) # 0 for on connect NOTE: refere beps
+            client_socket.sendto(announce_packet, _parse_udp_url(self.url))
+            res = client_socket.recvfrom(1024)
+            data, address = res
+            unpack_struct = struct.Struct('>HLLLLQQQ20s20sLLQ')
+            action, _, interval, leechers, seeders, ip_address, port = unpack_struct.unpack(data[:98])
+            print action, _, interval, leechers, seeders, ip_address, port
+
+
+
+
+
+
+
 class TrackerResponse(object):
-
     """
+
       Wrapper for Trackers response
       failure_reason: The peer should interpret this as if the attempt to join the torrent failed.
       interval      : The value of this key indicated the amount of time that a
@@ -131,18 +226,20 @@ class TrackerResponse(object):
       Peers intern containse three assosiated properties.
 
       peer_id : self defined 20 bit id.
+
       ip      : string value indicating the ip
                 address of the peer.
+
       port    : self designated port number of the peer.
+
     """
 
     def __init__(self, string_response):
-
         self._response = json.loads(string_response)
 
         if 'failure_reason' in self._response:
             raise TrackerResponseException('tracker request failed',
-                                    self._response.get('failure_reason'))
+                                           self._response.get('failure_reason'))
 
         self.interval = self._response.get("interval", 10)
         self.seeds = self._response.get("complete")
