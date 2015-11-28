@@ -169,7 +169,6 @@ class TrackerRequest(dict, object):
 
 
     def _announce(self, announce_state, event_state):
-        print self.connection_id, self.left, self
         announce_packet = struct.pack(">Qii20s20sQQQiiiii", self.connection_id,
                                 long(announce_state),
                                 self.__transaction_id, self.get("info_hash"),
@@ -188,7 +187,6 @@ class TrackerRequest(dict, object):
             data, address = res
             unpack_struct = struct.Struct('>iiq')
             action, self.transaction_id, message = unpack_struct.unpack(data)
-            print action, self.transaction_id, message
             if action == 3:
                 raise TrackerRequestException(message, "")
             if message:
@@ -201,9 +199,7 @@ class TrackerRequest(dict, object):
             data, address = res
             unpack_struct = struct.Struct('>HLLLLQQQ20s20sLLQ')
             action, _, interval, leechers, seeders, ip_address, port = unpack_struct.unpack(data[:98])
-            print action, _, interval, leechers, seeders, ip_address, port
-
-
+#wip
 
 
 
