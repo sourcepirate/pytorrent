@@ -9,7 +9,7 @@ setup(
     name='pytorrent',
     packages=['pytorrent'],
     version='0.0.5',
-    description='Pythonic way of Bittorrent',
+    description='Bittorent for humans',
     long_description=Readme(),
     author='plasmashadow',
     author_email='plasmashadowx@gmail.com',
