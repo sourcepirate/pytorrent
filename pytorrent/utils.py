@@ -1,5 +1,6 @@
 
 from random import choice
+import threading
 
 
 def _split_pieces(string, n):
@@ -43,3 +44,27 @@ def generation_randomid(size, integer=False):
         return res
     else:
         return int(res)
+
+
+class Timeout(object):
+
+    """
+      A very small timer which triggers an event
+      after particular time.
+    """
+
+    def __init__(self, seconds=1, error_message='Timeout'):
+        self.seconds = seconds
+        self.error_message = error_message
+        self.timer = None
+
+    def handle_timeout(self, *args, **kwargs):
+        raise Exception("timeout beep beep")
+
+    def __enter__(self):
+        self.timer = threading.Timer(self.seconds, self.handle_timeout)
+
+    def __exit__(self, type, value, traceback):
+
+        if self.timer:
+          self.timer.cancel()
