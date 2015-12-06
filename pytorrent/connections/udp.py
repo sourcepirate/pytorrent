@@ -45,6 +45,7 @@ def parse_udp_response(response):
 
     data, address = response
     response = defaultdict(lambda x: None)
+    print len(data)
 
     if len(data) == 16:
         #then it is a connect response
@@ -54,17 +55,15 @@ def parse_udp_response(response):
         response['action'] = action
         return response
 
-    elif len(data) == 26:
-        action, transaction_id, interval, leechers, seeders, ip_address, tcp_port =\
-            struct.unpack(">iiiiiih", data)
+    elif len(data) >= 20:
+        action, transaction_id, interval, leechers =\
+            struct.unpack(">iiii", data[:16])
 
         response['action'] = action
         response['transaction_id'] = transaction_id
         response['interval'] = interval
         response['leechers'] = leechers
-        response['seeders'] = seeders
-        response['ip_address'] = ip_address
-        response['port'] = tcp_port
+        more_data = data[16:]
         return response
     else:
         pass
