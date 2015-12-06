@@ -19,7 +19,7 @@ setup(
         'Programming Language :: Python :: 2',
         'Intended Audience :: Developers'
     ],
-    install_requires=['six'],
+    install_requires=['six', 'mock'],
     include_package_data=True,
     license='BSD License',
 )

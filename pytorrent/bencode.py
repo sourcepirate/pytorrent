@@ -210,5 +210,7 @@ class Bencoder(object):
 
     @classmethod
     def decode(cls, becode_string):
-        """decodes the becoded strings to python objects"""
+        """decodes the becoded strings to python objects
+        :rtype: object
+        """
         return _decode(becode_string)
